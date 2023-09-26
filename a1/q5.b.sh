@@ -15,27 +15,51 @@ isHighGC() {
     echo $(echo $STR | grep -Ec $REGEX)
 }
 
+mask() {
+
+}
+
 main() {
     sp="/-\|"
     K=$1
-    COUNT=0
-    i=1
-    # original length of string per newline. It is used to reunion the file in format of fasta
-    LIMIT=0
-    INPUT=$(grep -v ">" chr22.fa | grep -vE "^[N|n]+\b.*$" | tr -d "\s\r,\n,\t,\r\n,\r")
+
+    INPUT=$(grep -v ">" chr22.fa | tr -d "\s\r,\n,\t,\r\n,\r")
+    # number of characters per line without newline character
+    LIMIT=$(grep -v ">" chr22.fa | head -n 1 | tr -d "\s\r,\n,\t,\r\n,\r" | wc -c)
+
     LEN=${#INPUT}
     N=$(ceil $(echo "scale=0; $K*0.7" | bc -l))
-    while [[ $(($i + $K)) -le $LEN ]]; do
+
+    SUB=${INPUT:0:K}
+    # count gc content per substring. Only use grep at the beginning as we will then
+    # count it one by one character.
+    GC=$(echo $SUB | grep -oE "[C|G|c|g]" | wc -l)
+    # masked output
+    OUTPUT=""
+    PAT="[G|C|g|c]"
+    for ((i = 1; i < $LEN - $K; i++)); do
+
         END=$(($i + $K - 1))
-        SUB=$(echo "$INPUT" | cut -c $i-$END)
-        printf "\r\033[K\b${sp:i%${#sp}:1} [%d/%d](%3.2f)%% | No. of high GC: %d" "$END" "$LEN" $(($END / $LEN * 100)) "$COUNT"
-        flag=$(isHighGC $(($N + 1)) $SUB)
-        if [[ $flag -gt 0 ]]; then
-            COUNT=$(($COUNT + 1))
+        HEAD=${SUB:0:1}
+        NEXT=${INPUT:END:1}
+        SUB=${SUB:1}$NEXT
+        if [[ $HEAD =~ $PAT ]]; then
+            ((GC--))
         fi
-        ((i++))
+        if [[ $NEXT =~ $PAT ]]; then
+            ((GC++))
+        fi
+        # mask the substring with N or n if it is high GC-content
+        if [[ $GC -gt $N ]]; then
+            MASKED=$(tr 'GCgc' 'NNnn' $SUB)
+            OUTPUT="${OUTPUT:0:i-1}$MASKED"
+        else
+            OUTPUT="$OUTPUT$NEXT"
+        fi
+
+        printf "\r\033[K\b${sp:i%${#sp}:1} [%d/%d](%3.2f)%%" "$END" "$LEN" $(($END / $LEN * 100))
     done
-    echo $COUNT
+    OUTPUT="$(grep '>' chr22.fa)""$(echo $OUTPUT | fold -w $LIMIT)"
 }
 
 main 100
