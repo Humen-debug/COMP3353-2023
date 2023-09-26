@@ -20,7 +20,7 @@ main() {
     K=$1
     COUNT=0
     i=1
-    INPUT=$(grep -v ">" chr22.fa | grep -vE "^[N|n]+\b.*$" | tr -d "\s\r,\n,\t,\r\n,\r")
+    INPUT=$(grep -v ">" chr22.fa | tr -d "\s\r,\n,\t,\r\n,\r")
     LEN=${#INPUT}
     N=$(ceil $(echo "scale=0; $K*0.7" | bc -l))
     while [[ $(($i + $K)) -le $LEN ]]; do

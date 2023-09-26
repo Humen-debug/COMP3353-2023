@@ -15,37 +15,47 @@ isHighGC() {
     echo $(echo $STR | grep -Ec $REGEX)
 }
 
-main() {
-    sp="/-\|"
+sp="/-\|"
+
+calcGC() {
     K=$1
+    INPUT=$2
     COUNT=0
-    i=1
-    N=$(ceil $(echo "scale=0; $K*0.7" | bc -l))
-    # frequently used command
-    CMD="grep -v '>' chr22.fa | grep -vE '^[N|n]+\b.*$'"
-    # Remove lines that are spanned by N (they are definitely not high GC content)
-    INPUT=$(eval "$CMD" | tr -d "\s\r,\n,\t,\r\n,\r")
-    ## INPUT=$(grep -v ">" chr22.fa | grep -vE "^[N|n]+\b.*$" | sed -n "50000,50100p" | tr -d "\s\r,\n,\t,\r\n,\r")
-
-    # Number of lines in files
-    LINES=$(eval "$CMD" | wc -l)
-
-    # original length of string per newline. It is used to reunion the file in format of fasta.
-    LIMIT=$(grep -v '>' chr22.fa | head -n 1 | tr -d "\n" | wc -c)
-
-    # length of concatted strings
     LEN=${#INPUT}
-
-    while [[ $(($i + $K)) -le $LEN ]]; do
-        END=$(($i + $K - 1))
-        SUB=$(echo "$INPUT" | cut -c $i-$END)
-        printf "\r\033[K\b${sp:i%${#sp}:1} [%d/%d](%3.2f)%% | No. of high GC: %d" "$END" "$LEN" $(($END / $LEN * 100)) "$COUNT"
+    N=$(ceil $(echo "scale=0; $K*0.7" | bc -l))
+    for ((i = 1; i <= $LEN - $K; i++)); do
+        SUB=${INPUT:0:K}
         flag=$(isHighGC $(($N + 1)) $SUB)
         if [[ $flag -gt 0 ]]; then
-            COUNT=$(($COUNT + 1))
+            ((COUNT++))
         fi
-        ((i++))
     done
+    echo $COUNT
+}
+
+# NOTE:
+# 1. Split the string into 200 chunks (in chr22.fa each chunk should have 254092 characters/bytes)
+# 2. Parallel process each chunk to count the high-gc content
+# 3. Pair-up each chunks to get those "in-between" substrings
+main() {
+    K=$1
+    COUNT=0
+    INPUT=$(grep -v ">" chr22.fa | tr -d "\s\r,\n,\t,\r\n,\r")
+    LEN=${#INPUT}
+    # Step 1: find size of each chunk
+    SIZE=$(echo "scale=0; $LEN/200" | bc -l)
+
+    CHUNKS=$(echo "$INPUT" | fold -w $SIZE)
+
+    # Parallel process for counting gc content of each chunk
+    i=0
+    while IFS= read -r line; do
+        ((i++))
+        calcGC $K "$line" >"./q5.a/res.$i.txt" &
+    done < <(echo "$CHUNKS")
+
+    wait
+
     echo $COUNT
 }
 
