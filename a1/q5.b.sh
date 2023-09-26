@@ -15,10 +15,6 @@ isHighGC() {
     echo $(echo $STR | grep -Ec $REGEX)
 }
 
-mask() {
-
-}
-
 main() {
     sp="/-\|"
     K=$1
@@ -29,7 +25,7 @@ main() {
 
     LEN=${#INPUT}
     N=$(ceil $(echo "scale=0; $K*0.7" | bc -l))
-
+    COUNT=0
     SUB=${INPUT:0:K}
     # count gc content per substring. Only use grep at the beginning as we will then
     # count it one by one character.
@@ -37,7 +33,7 @@ main() {
     # masked output
     OUTPUT=""
     PAT="[G|C|g|c]"
-    for ((i = 1; i < $LEN - $K; i++)); do
+    for ((i = 1; i <= $LEN - $K; i++)); do
 
         END=$(($i + $K - 1))
         HEAD=${SUB:0:1}
@@ -51,15 +47,17 @@ main() {
         fi
         # mask the substring with N or n if it is high GC-content
         if [[ $GC -gt $N ]]; then
-            MASKED=$(tr 'GCgc' 'NNnn' $SUB)
+            MASKED=$(echo $SUB | tr 'GCgc' 'NNnn')
             OUTPUT="${OUTPUT:0:i-1}$MASKED"
+            ((COUNT++))
         else
             OUTPUT="$OUTPUT$NEXT"
         fi
-
-        printf "\r\033[K\b${sp:i%${#sp}:1} [%d/%d](%3.2f)%%" "$END" "$LEN" $(($END / $LEN * 100))
+        printf "\r\033[K\b${sp:i%${#sp}:1} [%d/%d](%3.2f)%% |  No. of high GC: %d" "$END" "$LEN" $(($END / $LEN * 100)) "$COUNT"
     done
     OUTPUT="$(grep '>' chr22.fa)""$(echo $OUTPUT | fold -w $LIMIT)"
+    echo "$OUTPUT" >chr22.masked.fa
+
 }
 
 main 100
